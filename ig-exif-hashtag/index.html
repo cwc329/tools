@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>IG EXIF Hashtag Generator</title>
+  <script src="https://cdn.jsdelivr.net/npm/exifr/dist/lite.umd.js"></script>
+  <style>
+    body { font-family: sans-serif; max-width: 500px; margin: 40px auto; }
+    button { margin-top: 10px; padding: 6px 12px; }
+    textarea { width: 100%; height: 120px; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <h2>IG EXIF Hashtag Generator</h2>
+  <input type="file" id="photo" accept="image/*" />
+  <textarea id="output" placeholder="Hashtag 會顯示在這裡"></textarea>
+  <button onclick="copyText()">複製</button>
+
+  <script>
+    const input = document.getElementById('photo');
+    const output = document.getElementById('output');
+
+    input.addEventListener('change', async function () {
+      const file = this.files[0];
+      if (!file) return;
+
+      const exif = await exifr.parse(file);
+
+      const camera = exif.Model || '';
+      const lens = exif.LensModel || '';
+      const aperture = exif.FNumber ? `f${exif.FNumber}` : '';
+      const shutter = exif.ExposureTime
+        ? `1_${Math.round(1 / exif.ExposureTime)}s`
+        : '';
+      const iso = exif.ISO ? `ISO${exif.ISO}` : '';
+
+      function clean(text) {
+        return text.replace(/\s+/g, '').replace(/\./g, '_');
+      }
+
+      const hashtags = [
+        camera && `#${clean(camera)}`,
+        lens && `#${clean(lens)}`,
+        aperture && `#${clean(aperture)}`,
+        shutter && `#${clean(shutter)}`,
+        iso && `#${clean(iso)}`
+      ].filter(Boolean).join('\n');
+
+      output.value = hashtags;
+    });
+
+    function copyText() {
+      output.select();
+      document.execCommand('copy');
+      alert('已複製到剪貼簿');
+    }
+  </script>
+</body>
+</html>
+
