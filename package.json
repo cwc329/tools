@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "setup": "mkdir -p public && cp node_modules/@6over3/zeroperl-ts/dist/esm/zeroperl.wasm public/zeroperl.wasm",
+    "setup": "mkdir -p src/public && cp node_modules/@6over3/zeroperl-ts/dist/esm/zeroperl.wasm src/public/zeroperl.wasm",
     "postinstall": "npm run setup"
   },
   "repository": {

@@ -1,2 +1,4 @@
 node_modules/
-public/zeroperl.wasm
+.vite/
+src/public/zeroperl.wasm
+dist/

@@ -1,5 +1,14 @@
 import { parseMetadata } from '@uswriting/exiftool'
 
+// --- Register Service Worker for WASM caching ---
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {})
+}
+
+// --- Pre-fetch WASM binary (download only, don't initialize Perl yet) ---
+const wasmFetchUrl = `${import.meta.env.BASE_URL}zeroperl.wasm`
+const wasmPreFetch = fetch(wasmFetchUrl).catch(() => {})
+
 // --- DOM Elements ---
 const input = document.getElementById('photo')
 const output = document.getElementById('output')
@@ -91,16 +100,20 @@ function buildFieldMap(exif) {
   const focalLength35 = !isNaN(fl35) ? `${Math.round(fl35)}mm` : ''
 
   const fn = parseNum(exif.FNumber)
-  const aperture = !isNaN(fn) ? `f${fn}` : ''
+  const aperture = !isNaN(fn) ? `f${String(fn).replace('.', '_')}` : ''
 
   let shutter = ''
   if (exif.ExposureTime) {
-    const et = parseNum(exif.ExposureTime)
-    if (!isNaN(et)) {
-      shutter = et >= 1 ? `${et}s` : `1_${Math.round(1 / et)}s`
-    } else if (typeof exif.ExposureTime === 'string') {
-      // Handle string like "1/125"
-      shutter = clean(exif.ExposureTime) + 's'
+    const etStr = String(exif.ExposureTime)
+    const fracMatch = etStr.match(/^(\d+)\/(\d+)$/)
+    if (fracMatch) {
+      // Fraction string like "1/125"
+      shutter = `${fracMatch[1]}_${fracMatch[2]}s`
+    } else {
+      const et = parseNum(exif.ExposureTime)
+      if (!isNaN(et)) {
+        shutter = et >= 1 ? `${et}s` : `1_${Math.round(1 / et)}s`
+      }
     }
   }
 
@@ -163,6 +176,33 @@ function buildFieldMap(exif) {
   }
 }
 
+// --- State: cache the last parsed field map ---
+let lastFieldMap = null
+
+/**
+ * Update hashtag output and warnings based on current checkbox selection.
+ * Uses the cached fieldMap so no re-parsing is needed.
+ */
+function updateOutput() {
+  if (!lastFieldMap) return
+
+  const selected = getSelectedFields()
+
+  const missing = Object.entries(lastFieldMap)
+    .filter(([key, val]) => selected.has(key) && !val)
+    .map(([key]) => fieldLabels[key] || key)
+  warningsEl.innerHTML = missing.length
+    ? `<p class="warn">⚠ 以下欄位在照片中找不到：${missing.join('、')}</p>`
+    : ''
+
+  const hashtags = Object.entries(lastFieldMap)
+    .filter(([key, val]) => selected.has(key) && val)
+    .map(([, val]) => `#${clean(val)}`)
+    .join('\n')
+
+  output.value = hashtags
+}
+
 // --- Main Logic ---
 
 input.addEventListener('change', async () => {
@@ -175,8 +215,6 @@ input.addEventListener('change', async () => {
   debugEl.textContent = ''
 
   try {
-    const wasmFetchUrl = `${import.meta.env.BASE_URL}zeroperl.wasm`
-
     // Single call without -n: get human-readable values including LensID
     const result = await parseMetadata(file, {
       fetch: () => fetch(wasmFetchUrl),
@@ -194,24 +232,9 @@ input.addEventListener('change', async () => {
     // Debug output
     debugEl.textContent = JSON.stringify(exif, null, 2)
 
-    const selected = getSelectedFields()
-    const fieldMap = buildFieldMap(exif)
-
-    // Show warnings for missing fields
-    const missing = Object.entries(fieldMap)
-      .filter(([key, val]) => selected.has(key) && !val)
-      .map(([key]) => fieldLabels[key] || key)
-    warningsEl.innerHTML = missing.length
-      ? `<p class="warn">⚠ 以下欄位在照片中找不到：${missing.join('、')}</p>`
-      : ''
-
-    // Build hashtags
-    const hashtags = Object.entries(fieldMap)
-      .filter(([key, val]) => selected.has(key) && val)
-      .map(([, val]) => `#${clean(val)}`)
-      .join('\n')
-
-    output.value = hashtags
+    // Cache the field map and update output
+    lastFieldMap = buildFieldMap(exif)
+    updateOutput()
   } catch (err) {
     output.value = `Error: ${err.message}`
     console.error(err)
@@ -220,8 +243,16 @@ input.addEventListener('change', async () => {
   }
 })
 
+// Checkbox changes instantly update hashtags without re-parsing
+document.getElementById('fields').addEventListener('change', updateOutput)
+
+const copyToast = document.getElementById('copy-toast')
+let toastTimer = null
+
 copyBtn.addEventListener('click', () => {
-  output.select()
-  document.execCommand('copy')
-  alert('已複製到剪貼簿')
+  navigator.clipboard.writeText(output.value).then(() => {
+    copyToast.style.opacity = '1'
+    clearTimeout(toastTimer)
+    toastTimer = setTimeout(() => { copyToast.style.opacity = '0' }, 1500)
+  })
 })
