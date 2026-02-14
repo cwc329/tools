@@ -1,0 +1,23 @@
+{
+  "name": "tools",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "setup": "mkdir -p public && cp node_modules/@6over3/zeroperl-ts/dist/esm/zeroperl.wasm public/zeroperl.wasm",
+    "postinstall": "npm run setup"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@cwc329.github.com:cwc329/tools"
+  },
+  "devDependencies": {
+    "vite": "^7.3.1"
+  },
+  "dependencies": {
+    "@uswriting/exiftool": "^1.0.9"
+  }
+}
